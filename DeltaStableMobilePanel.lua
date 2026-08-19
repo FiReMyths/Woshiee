@@ -1,40 +1,881 @@
---[[
-DELTA MOBILE PANEL - STABLE BUILD
-----------------------------------
-• Single paste-and-run script
-• Mobile responsive
-• Smooth open / close
-• Scrollable pages
-• Touch-friendly controls
-• No invisible full-screen touch blocker
-• Game camera remains usable outside the GUI
-• Draggable header
-• Floating toggle button
-• Blur + dim background
-• Animated tabs and toggles
-• Safe cleanup on re-execution
-]]
-
--- SERVICES
 local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local Lighting = game:GetService("Lighting")
 
--- PLAYER
-local Player = Players.LocalPlayer
-if not Player then
-	warn("[Delta Panel] LocalPlayer unavailable.")
+local LocalPlayer = Players.LocalPlayer
+
+if not UserInputService.TouchEnabled then
 	return
 end
 
-local PlayerGui = Player:WaitForChild("PlayerGui", 10)
-if not PlayerGui then
-	warn("[Delta Panel] PlayerGui unavailable.")
-	return
+local Camera = workspace.CurrentCamera
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+local Settings = {
+	AimEnabled = false,
+	ESPEnabled = false,
+	TeamCheck = false,
+
+	AimFOV = 180,
+	AimStrength = 0.35,
+	MaxDistance = 500,
+	AimPart = "Head"
+}
+
+local CurrentTarget = nil
+
+--------------------------------------------------
+-- GUI
+--------------------------------------------------
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "MobileDeveloperTools"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.IgnoreGuiInset = true
+ScreenGui.Parent = PlayerGui
+
+local Main = Instance.new("Frame")
+Main.Size = UDim2.fromOffset(280, 370)
+Main.Position = UDim2.new(0, 20, 0.5, -185)
+Main.BackgroundColor3 = Color3.fromRGB(17, 17, 23)
+Main.BorderSizePixel = 0
+Main.Parent = ScreenGui
+
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 16)
+MainCorner.Parent = Main
+
+local MainStroke = Instance.new("UIStroke")
+MainStroke.Color = Color3.fromRGB(65, 65, 85)
+MainStroke.Thickness = 1
+MainStroke.Parent = Main
+
+--------------------------------------------------
+-- Header
+--------------------------------------------------
+
+local Header = Instance.new("Frame")
+Header.Size = UDim2.new(1, 0, 0, 58)
+Header.BackgroundTransparency = 1
+Header.Parent = Main
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -65, 0, 30)
+Title.Position = UDim2.fromOffset(13, 7)
+Title.BackgroundTransparency = 1
+Title.Text = "LinerExploit"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 17
+Title.Font = Enum.Font.GothamBold
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = Header
+
+local Subtitle = Instance.new("TextLabel")
+Subtitle.Size = UDim2.new(1, -65, 0, 18)
+Subtitle.Position = UDim2.fromOffset(13, 34)
+Subtitle.BackgroundTransparency = 1
+Subtitle.Text = "Aim Assist • ESP"
+Subtitle.TextColor3 = Color3.fromRGB(135, 135, 150)
+Subtitle.TextSize = 10
+Subtitle.Font = Enum.Font.Gotham
+Subtitle.TextXAlignment = Enum.TextXAlignment.Left
+Subtitle.Parent = Header
+
+local CloseButton = Instance.new("TextButton")
+CloseButton.Size = UDim2.fromOffset(42, 42)
+CloseButton.Position = UDim2.new(1, -50, 0, 8)
+CloseButton.BackgroundColor3 = Color3.fromRGB(32, 32, 42)
+CloseButton.Text = "×"
+CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseButton.TextSize = 24
+CloseButton.Font = Enum.Font.GothamBold
+CloseButton.Parent = Header
+
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 11)
+CloseCorner.Parent = CloseButton
+
+--------------------------------------------------
+-- Floating Open Button
+--------------------------------------------------
+
+local OpenButton = Instance.new("TextButton")
+OpenButton.Size = UDim2.fromOffset(55, 55)
+OpenButton.Position = UDim2.new(0, 20, 0.5, -27)
+OpenButton.BackgroundColor3 = Color3.fromRGB(25, 25, 34)
+OpenButton.Text = "☰"
+OpenButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+OpenButton.TextSize = 23
+OpenButton.Font = Enum.Font.GothamBold
+OpenButton.Visible = false
+OpenButton.Parent = ScreenGui
+
+local OpenCorner = Instance.new("UICorner")
+OpenCorner.CornerRadius = UDim.new(1, 0)
+OpenCorner.Parent = OpenButton
+
+local OpenStroke = Instance.new("UIStroke")
+OpenStroke.Color = Color3.fromRGB(70, 70, 90)
+OpenStroke.Thickness = 1
+OpenStroke.Parent = OpenButton
+
+--------------------------------------------------
+-- Content
+--------------------------------------------------
+
+local Container = Instance.new("Frame")
+Container.Size = UDim2.new(1, -20, 1, -68)
+Container.Position = UDim2.fromOffset(10, 62)
+Container.BackgroundTransparency = 1
+Container.Parent = Main
+
+local Layout = Instance.new("UIListLayout")
+Layout.Padding = UDim.new(0, 7)
+Layout.SortOrder = Enum.SortOrder.LayoutOrder
+Layout.Parent = Container
+
+local function CreateButton(Text)
+	local Button = Instance.new("TextButton")
+
+	Button.Size = UDim2.new(1, 0, 0, 40)
+	Button.BackgroundColor3 = Color3.fromRGB(29, 29, 39)
+	Button.BorderSizePixel = 0
+
+	Button.Text = Text
+	Button.TextColor3 = Color3.fromRGB(225, 225, 235)
+	Button.TextSize = 12
+	Button.Font = Enum.Font.GothamMedium
+
+	Button.AutoButtonColor = false
+	Button.Parent = Container
+
+	local Corner = Instance.new("UICorner")
+	Corner.CornerRadius = UDim.new(0, 9)
+	Corner.Parent = Button
+
+	return Button
 end
 
--- CLEANUP
+local AimButton = CreateButton("🎯  AIM ASSIST     OFF")
+local ESPButton = CreateButton("👁  ESP             OFF")
+local TeamButton = CreateButton("👥  TEAM CHECK     OFF")
+local StrengthButton = CreateButton("⚡  AIM: MEDIUM")
+local FOVButton = CreateButton("⭕  FOV: 180")
+local DistanceButton = CreateButton("📏  DISTANCE: 500")
+
+--------------------------------------------------
+-- Close / Open
+--------------------------------------------------
+
+CloseButton.Activated:Connect(function()
+	Main.Visible = false
+	OpenButton.Visible = true
+end)
+
+OpenButton.Activated:Connect(function()
+	Main.Visible = true
+	OpenButton.Visible = false
+end)
+
+--------------------------------------------------
+-- Aim Strength
+--------------------------------------------------
+
+local Strengths = {
+	{
+		Name = "WEAK",
+		Value = 0.10
+	},
+	{
+		Name = "LIGHT",
+		Value = 0.20
+	},
+	{
+		Name = "MEDIUM",
+		Value = 0.35
+	},
+	{
+		Name = "STRONG",
+		Value = 0.55
+	},
+	{
+		Name = "LOCK",
+		Value = 1
+	}
+}
+
+local StrengthIndex = 3
+
+local function UpdateStrength()
+	local Data = Strengths[StrengthIndex]
+
+	Settings.AimStrength = Data.Value
+
+	StrengthButton.Text =
+		"⚡  AIM: " .. Data.Name
+end
+
+StrengthButton.Activated:Connect(function()
+
+	StrengthIndex += 1
+
+	if StrengthIndex > #Strengths then
+		StrengthIndex = 1
+	end
+
+	UpdateStrength()
+end)
+
+--------------------------------------------------
+-- Buttons
+--------------------------------------------------
+
+local function UpdateButton(Button, Label, Enabled)
+
+	if Enabled then
+		Button.Text = Label .. "     ON"
+		Button.BackgroundColor3 =
+			Color3.fromRGB(35, 90, 65)
+	else
+		Button.Text = Label .. "     OFF"
+		Button.BackgroundColor3 =
+			Color3.fromRGB(29, 29, 39)
+	end
+end
+
+AimButton.Activated:Connect(function()
+
+	Settings.AimEnabled = not Settings.AimEnabled
+
+	if not Settings.AimEnabled then
+		CurrentTarget = nil
+	end
+
+	UpdateButton(
+		AimButton,
+		"🎯  AIM ASSIST",
+		Settings.AimEnabled
+	)
+end)
+
+ESPButton.Activated:Connect(function()
+
+	Settings.ESPEnabled = not Settings.ESPEnabled
+
+	UpdateButton(
+		ESPButton,
+		"👁  ESP",
+		Settings.ESPEnabled
+	)
+end)
+
+--------------------------------------------------
+-- TEAM CHECK
+--------------------------------------------------
+
+TeamButton.Activated:Connect(function()
+
+	Settings.TeamCheck = not Settings.TeamCheck
+
+	if CurrentTarget and
+		Settings.TeamCheck and
+		CurrentTarget.Team ~= nil and
+		LocalPlayer.Team ~= nil and
+		CurrentTarget.Team == LocalPlayer.Team then
+
+		CurrentTarget = nil
+	end
+
+	UpdateButton(
+		TeamButton,
+		"👥  TEAM CHECK",
+		Settings.TeamCheck
+	)
+end)
+
+--------------------------------------------------
+-- FOV
+--------------------------------------------------
+
+local FOVValues = {
+	100,
+	140,
+	180,
+	240,
+	300
+}
+
+FOVButton.Activated:Connect(function()
+
+	local Index =
+		table.find(FOVValues, Settings.AimFOV) or 3
+
+	Index += 1
+
+	if Index > #FOVValues then
+		Index = 1
+	end
+
+	Settings.AimFOV =
+		FOVValues[Index]
+
+	FOVButton.Text =
+		"⭕  FOV: " .. Settings.AimFOV
+end)
+
+--------------------------------------------------
+-- Distance
+--------------------------------------------------
+
+local DistanceValues = {
+	100,
+	250,
+	500,
+	1000
+}
+
+DistanceButton.Activated:Connect(function()
+
+	local Index =
+		table.find(
+			DistanceValues,
+			Settings.MaxDistance
+		) or 3
+
+	Index += 1
+
+	if Index > #DistanceValues then
+		Index = 1
+	end
+
+	Settings.MaxDistance =
+		DistanceValues[Index]
+
+	DistanceButton.Text =
+		"📏  DISTANCE: " ..
+		Settings.MaxDistance
+end)
+
+--------------------------------------------------
+-- FOV Circle
+--------------------------------------------------
+
+local FOVCircle = Instance.new("Frame")
+
+FOVCircle.Size =
+	UDim2.fromOffset(
+		Settings.AimFOV * 2,
+		Settings.AimFOV * 2
+	)
+
+FOVCircle.AnchorPoint =
+	Vector2.new(0.5, 0.5)
+
+FOVCircle.Position =
+	UDim2.fromScale(0.5, 0.5)
+
+FOVCircle.BackgroundTransparency = 1
+FOVCircle.Visible = false
+FOVCircle.Parent = ScreenGui
+
+local FOVCorner = Instance.new("UICorner")
+FOVCorner.CornerRadius =
+	UDim.new(1, 0)
+
+FOVCorner.Parent = FOVCircle
+
+local FOVStroke = Instance.new("UIStroke")
+FOVStroke.Color =
+	Color3.fromRGB(80, 170, 255)
+
+FOVStroke.Thickness = 2
+FOVStroke.Transparency = 0.25
+FOVStroke.Parent = FOVCircle
+
+--------------------------------------------------
+-- Drag Main Window
+--------------------------------------------------
+
+local Dragging = false
+local DragStart
+local StartPosition
+
+Header.InputBegan:Connect(function(Input)
+
+	if Input.UserInputType ==
+		Enum.UserInputType.Touch then
+
+		Dragging = true
+
+		DragStart = Input.Position
+		StartPosition = Main.Position
+
+		Input.Changed:Connect(function()
+
+			if Input.UserInputState ==
+				Enum.UserInputState.End then
+
+				Dragging = false
+			end
+		end)
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(Input)
+
+	if Dragging and
+		Input.UserInputType ==
+		Enum.UserInputType.Touch then
+
+		local Delta =
+			Input.Position - DragStart
+
+		Main.Position = UDim2.new(
+			StartPosition.X.Scale,
+			StartPosition.X.Offset + Delta.X,
+			StartPosition.Y.Scale,
+			StartPosition.Y.Offset + Delta.Y
+		)
+	end
+end)
+
+--------------------------------------------------
+-- Character
+--------------------------------------------------
+
+local function GetCharacter(Player)
+
+	if not Player or
+		not Player.Character then
+
+		return nil
+	end
+
+	local Character = Player.Character
+
+	local Humanoid =
+		Character:FindFirstChildOfClass(
+			"Humanoid"
+		)
+
+	local Root =
+		Character:FindFirstChild(
+			"HumanoidRootPart"
+		)
+
+	local Head =
+		Character:FindFirstChild(
+			Settings.AimPart
+		)
+
+	if not Humanoid or
+		Humanoid.Health <= 0 or
+		not Root or
+		not Head then
+
+		return nil
+	end
+
+	return Character,
+		Humanoid,
+		Root,
+		Head
+end
+
+--------------------------------------------------
+-- Team Detection
+--------------------------------------------------
+
+local function IsSameTeam(Player)
+
+	if not Settings.TeamCheck then
+		return false
+	end
+
+	-- IMPORTANT:
+	-- nil == nil would otherwise make every
+	-- unassigned player look like a teammate.
+
+	if LocalPlayer.Team == nil then
+		return false
+	end
+
+	if Player.Team == nil then
+		return false
+	end
+
+	return Player.Team == LocalPlayer.Team
+end
+
+--------------------------------------------------
+-- Target Validation
+--------------------------------------------------
+
+local function IsValidTarget(Player)
+
+	if not Player or
+		Player == LocalPlayer or
+		not Player.Parent then
+
+		return false
+	end
+
+	if IsSameTeam(Player) then
+		return false
+	end
+
+	local Character,
+		Humanoid,
+		Root,
+		Head = GetCharacter(Player)
+
+	if not Character then
+		return false
+	end
+
+	local LocalCharacter =
+		LocalPlayer.Character
+
+	if not LocalCharacter then
+		return false
+	end
+
+	local LocalRoot =
+		LocalCharacter:FindFirstChild(
+			"HumanoidRootPart"
+		)
+
+	if not LocalRoot then
+		return false
+	end
+
+	local Distance =
+		(Root.Position -
+			LocalRoot.Position).Magnitude
+
+	return Distance <=
+		Settings.MaxDistance
+end
+
+--------------------------------------------------
+-- Find Target
+--------------------------------------------------
+
+local function FindNewTarget()
+
+	local BestTarget = nil
+
+	local BestDistance =
+		Settings.AimFOV
+
+	local Viewport =
+		Camera.ViewportSize
+
+	local Center =
+		Vector2.new(
+			Viewport.X / 2,
+			Viewport.Y / 2
+		)
+
+	for _, Player in
+		ipairs(Players:GetPlayers()) do
+
+		if IsValidTarget(Player) then
+
+			local Character,
+				Humanoid,
+				Root,
+				Head =
+				GetCharacter(Player)
+
+			local ScreenPosition,
+				Visible =
+				Camera:WorldToViewportPoint(
+					Head.Position
+				)
+
+			if Visible and
+				ScreenPosition.Z > 0 then
+
+				local Point =
+					Vector2.new(
+						ScreenPosition.X,
+						ScreenPosition.Y
+					)
+
+				local Distance =
+					(Point - Center).Magnitude
+
+				if Distance <
+					BestDistance then
+
+					BestDistance =
+						Distance
+
+					BestTarget =
+						Player
+				end
+			end
+		end
+	end
+
+	return BestTarget
+end
+
+--------------------------------------------------
+-- Sticky Aim
+--------------------------------------------------
+
+RunService.RenderStepped:Connect(function()
+
+	if not Settings.AimEnabled then
+
+		CurrentTarget = nil
+		FOVCircle.Visible = false
+
+		return
+	end
+
+	FOVCircle.Visible = true
+
+	FOVCircle.Size =
+		UDim2.fromOffset(
+			Settings.AimFOV * 2,
+			Settings.AimFOV * 2
+		)
+
+	if not IsValidTarget(CurrentTarget) then
+
+		CurrentTarget =
+			FindNewTarget()
+	end
+
+	if not CurrentTarget then
+		return
+	end
+
+	local Character,
+		Humanoid,
+		Root,
+		Head =
+		GetCharacter(CurrentTarget)
+
+	if not Head then
+
+		CurrentTarget = nil
+
+		return
+	end
+
+	local CameraPosition =
+		Camera.CFrame.Position
+
+	local Desired =
+		CFrame.lookAt(
+			CameraPosition,
+			Head.Position
+		)
+
+	Camera.CFrame =
+		Camera.CFrame:Lerp(
+			Desired,
+			Settings.AimStrength
+		)
+end)
+
+--------------------------------------------------
+-- ESP
+--------------------------------------------------
+
+local ESP = {}
+
+local function CreateESP(Player)
+
+	if Player == LocalPlayer or
+		ESP[Player] then
+
+		return
+	end
+
+	local Billboard =
+		Instance.new("BillboardGui")
+
+	Billboard.Name =
+		"MobileESP"
+
+	Billboard.Size =
+		UDim2.fromOffset(160, 70)
+
+	Billboard.StudsOffset =
+		Vector3.new(0, 3, 0)
+
+	Billboard.AlwaysOnTop = true
+	Billboard.Enabled = false
+	Billboard.Parent = ScreenGui
+
+	local Name =
+		Instance.new("TextLabel")
+
+	Name.Size =
+		UDim2.new(1, 0, 0, 20)
+
+	Name.BackgroundTransparency = 1
+	Name.TextColor3 =
+		Color3.fromRGB(255, 255, 255)
+
+	Name.TextStrokeTransparency = 0.4
+	Name.TextSize = 13
+	Name.Font =
+		Enum.Font.GothamBold
+
+	Name.Parent = Billboard
+
+	local Health =
+		Instance.new("TextLabel")
+
+	Health.Size =
+		UDim2.new(1, 0, 0, 18)
+
+	Health.Position =
+		UDim2.fromOffset(0, 20)
+
+	Health.BackgroundTransparency = 1
+
+	Health.TextColor3 =
+		Color3.fromRGB(100, 255, 130)
+
+	Health.TextStrokeTransparency = 0.4
+	Health.TextSize = 11
+	Health.Font =
+		Enum.Font.Gotham
+
+	Health.Parent = Billboard
+
+	local Distance =
+		Instance.new("TextLabel")
+
+	Distance.Size =
+		UDim2.new(1, 0, 0, 18)
+
+	Distance.Position =
+		UDim2.fromOffset(0, 38)
+
+	Distance.BackgroundTransparency = 1
+
+	Distance.TextColor3 =
+		Color3.fromRGB(180, 200, 255)
+
+	Distance.TextStrokeTransparency = 0.4
+	Distance.TextSize = 11
+	Distance.Font =
+		Enum.Font.Gotham
+
+	Distance.Parent = Billboard
+
+	ESP[Player] = {
+		Billboard = Billboard,
+		Name = Name,
+		Health = Health,
+		Distance = Distance
+	}
+end
+
+local function RemoveESP(Player)
+
+	if ESP[Player] then
+
+		ESP[Player].Billboard:Destroy()
+		ESP[Player] = nil
+	end
+
+	if CurrentTarget == Player then
+		CurrentTarget = nil
+	end
+end
+
+for _, Player in
+	ipairs(Players:GetPlayers()) do
+
+	CreateESP(Player)
+end
+
+Players.PlayerAdded:Connect(CreateESP)
+Players.PlayerRemoving:Connect(RemoveESP)
+
+RunService.RenderStepped:Connect(function()
+
+	for Player, Object in
+		pairs(ESP) do
+
+		if not Settings.ESPEnabled then
+
+			Object.Billboard.Enabled = false
+
+			continue
+		end
+
+		if not IsValidTarget(Player) then
+
+			Object.Billboard.Enabled = false
+
+			continue
+		end
+
+		local Character,
+			Humanoid,
+			Root,
+			Head =
+			GetCharacter(Player)
+
+		local LocalCharacter =
+			LocalPlayer.Character
+
+		local LocalRoot =
+			LocalCharacter and
+			LocalCharacter:FindFirstChild(
+				"HumanoidRootPart"
+			)
+
+		if not LocalRoot then
+
+			Object.Billboard.Enabled = false
+
+			continue
+		end
+
+		local Distance =
+			(Root.Position -
+				LocalRoot.Position).Magnitude
+
+		Object.Billboard.Adornee =
+			Head
+
+		Object.Billboard.Enabled = true
+
+		Object.Name.Text =
+			Player.DisplayName
+
+		local HealthPercent =
+			math.floor(
+				(Humanoid.Health /
+					Humanoid.MaxHealth) * 100
+			)
+
+		Object.Health.Text =
+			"HP: " ..
+			math.max(
+				0,
+				HealthPercent
+			) ..
+			"%"
+
+		Object.Distance.Text =
+			math.floor(Distance) ..
+			" studs"
+	end
+end)
+
+UpdateStrength()-- CLEANUP
 pcall(function()
 	local oldGui = PlayerGui:FindFirstChild("DeltaStableMobilePanel")
 	if oldGui then oldGui:Destroy() end
